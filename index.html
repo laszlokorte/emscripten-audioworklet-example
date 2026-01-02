@@ -3,14 +3,14 @@
     <head>
         <meta charset="utf-8" />
         <link rel="icon" href="favicon.svg" />
-        <title>Emscripten Test</title>
+        <title>Emscripten AudioWorklet Test</title>
     </head>
     <body>
         <div class="app">
             <header>
-                <h1>Emscripten</h1>
-                <p>Simple WASM+WebGL example using Emscripten.</p>
-                <p>Click on the canvas to turn sound on/off</p>
+                <h1>Emscripten + Audioworklet</h1>
+                <p>Simple WASM+AudioWorklet example.</p>
+                <p>Click the buttons below to play sounds.</p>
                 <button id="lkStart">Start</button>
                 <button id="lkStop">Stop</button>
                 <button id="lkPeep">Peep</button>
@@ -43,6 +43,12 @@
 
             <script src="build/main.js"></script>
             <script type="module">
+                function log(msg) {
+                    if (lkLog.childNodes.length > 10) {
+                        lkLog.removeChild(lkLog.firstChild);
+                    }
+                    lkLog.appendChild(document.createTextNode(msg + "\n"));
+                }
                 const memory = new WebAssembly.Memory({
                     initial: 256,
                     maximum: 256,
@@ -84,9 +90,19 @@
                 const freqParam = bufferNode.parameters.get("freq");
                 freqParam.value = lkFreq.value;
                 lkPeep.addEventListener("click", async () => {
-                    instance.exports.play_sound(
-                        440 * Math.pow(2, Math.round(Math.random() * 12) / 12),
-                    );
+                    if (
+                        instance.exports.play_sound(
+                            440 *
+                                Math.pow(
+                                    2,
+                                    Math.round(Math.random() * 12) / 12,
+                                ),
+                        )
+                    ) {
+                        log("Playing Sound");
+                    } else {
+                        log("Limits of concurent sounds reached");
+                    }
                 });
                 lkStart.addEventListener("click", async () => {
                     const now = audioCtx.currentTime;
@@ -100,6 +116,8 @@
                         audioCtx.currentTime + fadeTime,
                     );
                     requestAnimationFrame(draw);
+
+                    log("Enable Sound");
                 });
                 lkStop.addEventListener("click", async () => {
                     const now = audioCtx.currentTime;
@@ -114,6 +132,7 @@
                         0.0,
                         audioCtx.currentTime + fadeTime,
                     );
+                    log("Disable Sound");
                 });
 
                 lkFreq.addEventListener("input", async (evt) => {
@@ -153,15 +172,20 @@
                     );
                     const s = [...samples];
                     drawCtx.fillStyle = "#fed";
-                    drawCtx.fillRect(0, 0, blockSize, lkCanvas.height);
+                    drawCtx.fillRect(
+                        0,
+                        0,
+                        (blockSize * lkCanvas.width) / blockSize,
+                        lkCanvas.height,
+                    );
 
                     drawCtx.fillStyle = "maroon";
 
                     for (let i = 0; i < blockSize; i++) {
                         drawCtx.fillRect(
-                            i,
+                            (i * lkCanvas.width) / blockSize,
                             lkCanvas.height / 2,
-                            1,
+                            lkCanvas.width / blockSize,
                             ((s[i] * lkCanvas.height) / 2) *
                                 volume.gain.value *
                                 gain.gain.value,

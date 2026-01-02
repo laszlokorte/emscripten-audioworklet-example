@@ -85,13 +85,16 @@ void setup() {
 EMSCRIPTEN_KEEPALIVE
 int play_sound(float freq) {
   sound *s = arena_push(&global_arena, sound);
+  if (!s) {
+    return 0;
+  }
   s->duration = 5000;
   s->freq = freq;
   s->time = 0;
   s->next = next_sound;
   s->volume = 1;
   next_sound = s;
-  return next_sound->freq;
+  return 1;
 }
 
 EMSCRIPTEN_KEEPALIVE
