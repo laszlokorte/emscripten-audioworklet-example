@@ -2,6 +2,7 @@
 #define MAX_SOUNDS 20
 #define SAMPLE_RATE 44100
 #define SOUND_BUFFER_SIZE 4410
+#define RENDER_BUFFER_SIZE 30
 #define M_PI 3.14159265358979323846f
 
 float sinf(float x) {
@@ -68,6 +69,16 @@ float phase = 0.0f;
 float sound_buffer[SOUND_BUFFER_SIZE] = {};
 unsigned int sound_buffer_index = 0;
 
+typedef struct rect {
+  float MinX;
+  float MinY;
+  float MaxX;
+  float MaxY;
+} rect;
+rect render_list[RENDER_BUFFER_SIZE] = {};
+unsigned int render_list_index = 0;
+unsigned int render_list_size = 0;
+
 float envelop(int Progress, int Duration) {
   int Attack = Duration / 4;
   int Decay = 2 * Duration / 4;
@@ -85,7 +96,7 @@ float envelop(int Progress, int Duration) {
          0.5f * (float)(Progress - Sustain) / (float)(Duration - Sustain);
 }
 
-float *generate_block(float freq, int block_size) {
+float *generate_block(float freq, int block_size, float volume) {
 
   if (sound_buffer_index + block_size >= SOUND_BUFFER_SIZE) {
     sound_buffer_index = 0;
@@ -95,7 +106,7 @@ float *generate_block(float freq, int block_size) {
 
   for (int i = 0; i < block_size; i++) {
 
-    block_base[i] = sinf(phase);
+    block_base[i] = volume * sinf(phase);
     phase += step;
     if (phase > 2.0f * M_PI) {
       phase -= 2.0f * M_PI;
@@ -127,9 +138,32 @@ float *generate_block(float freq, int block_size) {
   return block_base;
 }
 
+void add_rect(float x, float y, float w, float h) {
+  rect new_rect = {};
+  new_rect.MinX = x - w / 2;
+  new_rect.MinY = y - h / 2;
+  new_rect.MaxX = x + w / 2;
+  new_rect.MaxY = y + h / 2;
+  render_list[render_list_index] = new_rect;
+  render_list_index++;
+  render_list_index %= RENDER_BUFFER_SIZE;
+  if (render_list_size < RENDER_BUFFER_SIZE) {
+
+    render_list_size++;
+  }
+}
+void clear_rects() {
+  render_list_index = 0;
+  render_list_size = 0;
+}
+
 float *get_sound_buffer_base() { return sound_buffer; }
 
 int get_sound_buffer_size() { return SOUND_BUFFER_SIZE; }
+
+rect *get_render_buffer_base() { return render_list; }
+
+int get_render_buffer_size() { return render_list_size; }
 
 void setup() {
   global_arena.used = 0;

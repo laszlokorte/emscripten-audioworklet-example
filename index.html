@@ -12,10 +12,14 @@
                 <p>Simple WASM+AudioWorklet example.</p>
                 <p>Click the buttons below to play sounds.</p>
                 <fieldset>
-                    <button id="lkStart">Start</button>
-                    <button id="lkStop">Stop</button>
+                    <button id="lkStart">Unmute</button>
+                    <button id="lkStop">Mute</button>
                     <button id="lkPeep">Peep</button>
                     <div class="controls">
+                        <label>
+                            <input type="checkbox" id="lkBackground" />
+                            Background Sound
+                        </label>
                         <label>
                             Base Frequency:
                             <input
@@ -87,7 +91,7 @@
                 );
                 const volume = audioCtx.createGain();
                 const gain = audioCtx.createGain();
-                gain.gain.value = 0; // start bei 0
+                gain.gain.value = 0;
                 instance.exports.setup();
 
                 volume.gain.value = lkAmpl.valueAsNumber;
@@ -95,7 +99,9 @@
                 volume.connect(gain);
                 gain.connect(audioCtx.destination);
                 const freqParam = bufferNode.parameters.get("freq");
+                const backgroundParam = bufferNode.parameters.get("volume");
                 freqParam.value = lkFreq.value;
+                backgroundParam.value = lkBackground.checked;
                 lkPeep.addEventListener("click", async () => {
                     if (
                         instance.exports.play_sound(
@@ -109,7 +115,9 @@
                     ) {
                         const free = instance.exports.count_free_sounds();
                         const active = instance.exports.count_playing_sounds();
-                        log(`Playing Sound ${active}/${active + free}`);
+                        log(
+                            `Playing Peep (Concurrent: ${active}, Allocated: ${active + free})`,
+                        );
                     } else {
                         log("Limits of concurent sounds reached");
                     }
@@ -125,7 +133,6 @@
                         1,
                         audioCtx.currentTime + fadeTime,
                     );
-                    requestAnimationFrame(draw);
 
                     log("Enable Sound");
                 });
@@ -152,6 +159,12 @@
                     );
                 });
 
+                lkBackground.addEventListener("input", async (evt) => {
+                    backgroundParam.setValueAtTime(
+                        evt.currentTarget.checked,
+                        audioCtx.currentTime,
+                    );
+                });
                 lkAmpl.addEventListener("input", async (evt) => {
                     volume.gain.cancelScheduledValues(audioCtx.currentTime);
                     volume.gain.linearRampToValueAtTime(
@@ -174,6 +187,59 @@
                             audioCtx.currentTime,
                         );
                     }
+                });
+
+                function resize() {
+                    lkCanvas.width =
+                        window.devicePixelRatio * lkCanvas.clientWidth;
+                    lkCanvas.height =
+                        window.devicePixelRatio * lkCanvas.clientHeight;
+                }
+                window.addEventListener("resize", resize);
+                resize();
+                lkCanvas.addEventListener("pointermove", (evt) => {
+                    if (
+                        !evt.isPrimary ||
+                        !evt.currentTarget.hasPointerCapture(evt.pointerId)
+                    ) {
+                        return;
+                    }
+                    evt.preventDefault();
+                    const rect = evt.currentTarget.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    instance.exports.add_rect(x, y, 10, 10);
+                });
+                lkCanvas.addEventListener("pointerdown", (evt) => {
+                    if (evt.isPrimary) {
+                        evt.currentTarget.setPointerCapture(evt.pointerId);
+                        const rect = evt.currentTarget.getBoundingClientRect();
+                        const x = event.clientX - rect.left;
+                        const y = event.clientY - rect.top;
+                        instance.exports.play_sound(
+                            440 *
+                                Math.pow(
+                                    2,
+                                    Math.round((x / rect.width) * 12) / 12,
+                                ),
+                            0.4,
+                        );
+                    }
+                });
+
+                lkCanvas.addEventListener("pointerup", (evt) => {
+                    instance.exports.clear_rects();
+                    const rect = evt.currentTarget.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    instance.exports.play_sound(
+                        440 *
+                            Math.pow(
+                                2,
+                                Math.round((y / rect.height) * 12) / 12,
+                            ),
+                        0.4,
+                    );
                 });
 
                 const drawCtx = lkCanvas.getContext("2d");
@@ -215,8 +281,33 @@
                                 gain.gain.value,
                         );
                     }
+                    const rect_base = instance.exports.get_render_buffer_base();
+                    const rect_count =
+                        instance.exports.get_render_buffer_size();
+                    const rects = new Float32Array(
+                        memory.buffer,
+                        rect_base,
+                        rect_count * 4,
+                    );
+                    drawCtx.fillStyle = "rebeccapurple";
+                    for (let i = 0; i < rect_count; i++) {
+                        const base = i * 4;
+                        const rect = {
+                            minX: rects[base],
+                            minY: rects[base + 1],
+                            maxX: rects[base + 2],
+                            maxY: rects[base + 3],
+                        };
+                        drawCtx.fillRect(
+                            rect.minX,
+                            rect.minY,
+                            rect.maxX - rect.minX,
+                            rect.maxY - rect.minY,
+                        );
+                    }
                     requestAnimationFrame(draw);
                 }
+                requestAnimationFrame(draw);
             </script>
             <style>
                 body {
@@ -280,6 +371,9 @@
                     gap: 1ex;
                     justify-content: end;
                     justify-self: end;
+                    background-color: #eee;
+                    padding: 0 1em 0 1ex;
+                    user-select: none;
                 }
                 button {
                     background-color: #111;
@@ -299,7 +393,8 @@
                     color: #eee;
                 }
                 input[type="range"] {
-                    padding: 1ex;
+                    padding: 1ex 0;
+                    margin: 0;
                 }
                 fieldset {
                     display: flex;
@@ -311,6 +406,7 @@
                 .controls {
                     display: flex;
                     flex-wrap: wrap;
+                    gap: 1em;
                     justify-content: end;
                 }
             </style>

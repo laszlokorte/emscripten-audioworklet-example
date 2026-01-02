@@ -24,6 +24,13 @@ class WasmProcessor extends AudioWorkletProcessor {
         maxValue: 1000,
         automationRate: "a-rate",
       },
+      {
+        name: "volume",
+        defaultValue: 0,
+        minValue: 0,
+        maxValue: 1,
+        automationRate: "a-rate",
+      },
     ];
   }
   process(inputs, outputs, parameters) {
@@ -31,6 +38,7 @@ class WasmProcessor extends AudioWorkletProcessor {
     const ptr = this.instance.exports.generate_block(
       parameters.freq[0],
       blockSize,
+      parameters.volume[0],
     );
 
     const samples = new Float32Array(this.memory.buffer, ptr, blockSize);
