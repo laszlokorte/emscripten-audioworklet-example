@@ -9,4 +9,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    print("Listening on http://localhost:8000")
     HTTPServer(("localhost", 8000), Handler).serve_forever()

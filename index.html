@@ -3,32 +3,42 @@
     <head>
         <meta charset="utf-8" />
         <link rel="icon" href="favicon.svg" />
-        <title>Emscripten AudioWorklet Test</title>
+        <title>WASM AudioWorklet Test</title>
     </head>
     <body>
         <div class="app">
             <header>
-                <h1>Emscripten + Audioworklet</h1>
+                <h1>WASM + Audioworklet</h1>
                 <p>Simple WASM+AudioWorklet example.</p>
                 <p>Click the buttons below to play sounds.</p>
-                <button id="lkStart">Start</button>
-                <button id="lkStop">Stop</button>
-                <button id="lkPeep">Peep</button>
-                <input
-                    type="range"
-                    min="1"
-                    max="1000"
-                    id="lkFreq"
-                    value="220"
-                />
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    id="lkAmpl"
-                    value="0.1"
-                />
+                <fieldset>
+                    <button id="lkStart">Start</button>
+                    <button id="lkStop">Stop</button>
+                    <button id="lkPeep">Peep</button>
+                    <div class="controls">
+                        <label>
+                            Base Frequency:
+                            <input
+                                type="range"
+                                min="0"
+                                max="1000"
+                                id="lkFreq"
+                                value="220"
+                            />
+                        </label>
+                        <label>
+                            Volume:
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                id="lkAmpl"
+                                value="0.1"
+                            />
+                        </label>
+                    </div>
+                </fieldset>
             </header>
             <div class="grid" id="lkGrid">
                 <section>
@@ -41,7 +51,6 @@
                 </section>
             </div>
 
-            <script src="build/main.js"></script>
             <script type="module">
                 function log(msg) {
                     if (lkLog.childNodes.length > 10) {
@@ -50,8 +59,8 @@
                     lkLog.appendChild(document.createTextNode(msg + "\n"));
                 }
                 const memory = new WebAssembly.Memory({
-                    initial: 256,
-                    maximum: 256,
+                    initial: 2,
+                    maximum: 2,
                     shared: true,
                 });
 
@@ -65,8 +74,6 @@
                 });
 
                 const blockSize = 128;
-
-                const samples = new Float32Array(memory.buffer, 0, blockSize);
 
                 const audioCtx = new AudioContext({ samplingRate: 44100 });
                 await audioCtx.audioWorklet.addModule("worklet.js");
@@ -97,9 +104,12 @@
                                     2,
                                     Math.round(Math.random() * 12) / 12,
                                 ),
+                            0.4,
                         )
                     ) {
-                        log("Playing Sound");
+                        const free = instance.exports.count_free_sounds();
+                        const active = instance.exports.count_playing_sounds();
+                        log(`Playing Sound ${active}/${active + free}`);
                     } else {
                         log("Limits of concurent sounds reached");
                     }
@@ -143,7 +153,15 @@
                 });
 
                 lkAmpl.addEventListener("input", async (evt) => {
-                    volume.gain.value = evt.currentTarget.valueAsNumber;
+                    volume.gain.cancelScheduledValues(audioCtx.currentTime);
+                    volume.gain.linearRampToValueAtTime(
+                        volume.gain.value,
+                        audioCtx.currentTime,
+                    );
+                    volume.gain.linearRampToValueAtTime(
+                        evt.currentTarget.value,
+                        audioCtx.currentTime + 0.1,
+                    );
                 });
                 window.addEventListener("pointermove", (evt) => {
                     if (evt.shiftKey) {
@@ -161,16 +179,18 @@
                 const drawCtx = lkCanvas.getContext("2d");
                 drawCtx.fillStyle = "#fed";
                 drawCtx.fillRect(0, 0, lkCanvas.width, lkCanvas.height);
-                let x = 0;
                 function draw() {
                     drawCtx.fillStyle = "#fed";
-                    const blockSize = 128;
+                    const sample_base =
+                        instance.exports.get_sound_buffer_base();
+                    const sample_count =
+                        instance.exports.get_sound_buffer_size();
                     const samples = new Float32Array(
                         memory.buffer,
-                        0,
-                        blockSize,
+                        sample_base,
+                        sample_count,
                     );
-                    const s = [...samples];
+                    const s = samples;
                     drawCtx.fillStyle = "#fed";
                     drawCtx.fillRect(
                         0,
@@ -179,25 +199,22 @@
                         lkCanvas.height,
                     );
 
-                    drawCtx.fillStyle = "maroon";
+                    drawCtx.fillStyle = "deepskyblue";
 
-                    for (let i = 0; i < blockSize; i++) {
+                    const skip = 20;
+                    for (let i = 0; i < sample_count; i++) {
+                        if (i % skip != 0) {
+                            continue;
+                        }
                         drawCtx.fillRect(
-                            (i * lkCanvas.width) / blockSize,
+                            (i * lkCanvas.width) / sample_count,
                             lkCanvas.height / 2,
-                            lkCanvas.width / blockSize,
+                            (skip * lkCanvas.width) / 2 / sample_count,
                             ((s[i] * lkCanvas.height) / 2) *
                                 volume.gain.value *
                                 gain.gain.value,
                         );
                     }
-                    x = instance.exports.get_sample();
-
-                    x =
-                        ((((x + blockSize) % lkCanvas.width) + lkCanvas.width) %
-                            lkCanvas.width) -
-                        blockSize;
-
                     requestAnimationFrame(draw);
                 }
             </script>
@@ -256,6 +273,45 @@
                 .scroller {
                     max-height: 30vh;
                     overflow: auto;
+                }
+                label {
+                    display: flex;
+                    align-items: center;
+                    gap: 1ex;
+                    justify-content: end;
+                    justify-self: end;
+                }
+                button {
+                    background-color: #111;
+                    color: #fff;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 1ex;
+                    font: inherit;
+                    cursor: pointer;
+                }
+                button:hover {
+                    background-color: #333;
+                }
+
+                button:active {
+                    background-color: #000;
+                    color: #eee;
+                }
+                input[type="range"] {
+                    padding: 1ex;
+                }
+                fieldset {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 1ex;
+                    padding: 0;
+                    border: none;
+                }
+                .controls {
+                    display: flex;
+                    flex-wrap: wrap;
+                    justify-content: end;
                 }
             </style>
             <details>
