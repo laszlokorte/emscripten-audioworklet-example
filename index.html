@@ -13,8 +13,22 @@
                 <p>Click on the canvas to turn sound on/off</p>
                 <button id="lkStart">Start</button>
                 <button id="lkStop">Stop</button>
-                <input type="range" min="1" max="1000" id="lkFreq" />
-                <input type="range" min="0" max="1" step="0.01" id="lkAmpl" />
+                <button id="lkPeep">Peep</button>
+                <input
+                    type="range"
+                    min="1"
+                    max="1000"
+                    id="lkFreq"
+                    value="220"
+                />
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    id="lkAmpl"
+                    value="0.1"
+                />
             </header>
             <div class="grid" id="lkGrid">
                 <section>
@@ -44,11 +58,6 @@
                     },
                 });
 
-                const instance2 = await WebAssembly.instantiate(wasm, {
-                    env: {
-                        memory,
-                    },
-                });
                 const blockSize = 128;
 
                 const samples = new Float32Array(memory.buffer, 0, blockSize);
@@ -66,20 +75,26 @@
                 const volume = audioCtx.createGain();
                 const gain = audioCtx.createGain();
                 gain.gain.value = 0; // start bei 0
+                instance.exports.setup();
 
-                volume.gain.value = 0.5;
+                volume.gain.value = lkAmpl.valueAsNumber;
                 bufferNode.connect(volume);
                 volume.connect(gain);
-                bufferNode.connect(gain);
-                const freqParam = bufferNode.parameters.get("freq");
                 gain.connect(audioCtx.destination);
+                const freqParam = bufferNode.parameters.get("freq");
+                freqParam.value = lkFreq.value;
+                lkPeep.addEventListener("click", async () => {
+                    instance.exports.play_sound(
+                        440 * Math.pow(2, Math.round(Math.random() * 12) / 12),
+                    );
+                });
                 lkStart.addEventListener("click", async () => {
                     const now = audioCtx.currentTime;
                     const fadeTime = 0.1;
                     lkGrid.classList.remove("loading");
                     await audioCtx.resume();
                     gain.gain.cancelScheduledValues(now);
-                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.setValueAtTime(gain.gain.value, now);
                     gain.gain.linearRampToValueAtTime(
                         1,
                         audioCtx.currentTime + fadeTime,
@@ -127,36 +142,40 @@
                 const drawCtx = lkCanvas.getContext("2d");
                 drawCtx.fillStyle = "#fed";
                 drawCtx.fillRect(0, 0, lkCanvas.width, lkCanvas.height);
+                let x = 0;
                 function draw() {
                     drawCtx.fillStyle = "#fed";
-                    drawCtx.fillRect(0, 0, lkCanvas.width, lkCanvas.height);
                     const blockSize = 128;
                     const samples = new Float32Array(
                         memory.buffer,
                         0,
                         blockSize,
                     );
-                    instance.exports.generate_block(
-                        lkFreq.valueAsNumber,
-                        samples,
-                        128,
-                    );
+                    const s = [...samples];
+                    drawCtx.fillStyle = "#fed";
+                    drawCtx.fillRect(0, 0, blockSize, lkCanvas.height);
 
                     drawCtx.fillStyle = "maroon";
+
                     for (let i = 0; i < blockSize; i++) {
                         drawCtx.fillRect(
-                            (i * lkCanvas.width) / blockSize,
-
+                            i,
                             lkCanvas.height / 2,
-                            (1 * lkCanvas.width) / blockSize,
-                            ((samples[i] * lkCanvas.height) / 2) *
+                            1,
+                            ((s[i] * lkCanvas.height) / 2) *
                                 volume.gain.value *
                                 gain.gain.value,
                         );
                     }
+                    x = instance.exports.get_sample();
+
+                    x =
+                        ((((x + blockSize) % lkCanvas.width) + lkCanvas.width) %
+                            lkCanvas.width) -
+                        blockSize;
+
                     requestAnimationFrame(draw);
                 }
-                draw();
             </script>
             <style>
                 body {
