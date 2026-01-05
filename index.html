@@ -8,7 +8,7 @@
     <body>
         <div class="app">
             <header>
-                <h1>WASM + Audioworklet</h1>
+                <h1><img src="favicon.svg" alt="icon" />WASM + Audioworklet</h1>
                 <p>Simple WASM+AudioWorklet example.</p>
                 <p>Click the buttons below to play sounds.</p>
                 <fieldset>
@@ -103,6 +103,16 @@
                 freqParam.value = lkFreq.value;
                 backgroundParam.value = lkBackground.checked;
                 lkPeep.addEventListener("click", async () => {
+                    await audioCtx.resume();
+
+                    const fadeTime = 0.1;
+                    const now = audioCtx.currentTime;
+                    gain.gain.cancelScheduledValues(now);
+                    gain.gain.setValueAtTime(gain.gain.value, now);
+                    gain.gain.linearRampToValueAtTime(
+                        1,
+                        audioCtx.currentTime + fadeTime,
+                    );
                     if (
                         instance.exports.play_sound(
                             440 *
@@ -110,6 +120,32 @@
                                     2,
                                     Math.round(Math.random() * 12) / 12,
                                 ),
+                            0.4,
+                        )
+                    ) {
+                        const free = instance.exports.count_free_sounds();
+                        const active = instance.exports.count_playing_sounds();
+                        log(
+                            `Playing Peep (Concurrent: ${active}, Allocated: ${active + free})`,
+                        );
+                    } else {
+                        log("Limits of concurent sounds reached");
+                    }
+                });
+                window.addEventListener("keydown", async (evt) => {
+                    await audioCtx.resume();
+
+                    const fadeTime = 0.1;
+                    const now = audioCtx.currentTime;
+                    gain.gain.cancelScheduledValues(now);
+                    gain.gain.setValueAtTime(gain.gain.value, now);
+                    gain.gain.linearRampToValueAtTime(
+                        1,
+                        audioCtx.currentTime + fadeTime,
+                    );
+                    if (
+                        instance.exports.play_sound(
+                            440 * Math.pow(2, (evt.keyCode % 12) / 12),
                             0.4,
                         )
                     ) {
@@ -162,7 +198,7 @@
                 lkBackground.addEventListener("input", async (evt) => {
                     backgroundParam.setValueAtTime(
                         evt.currentTarget.checked,
-                        audioCtx.currentTime,
+                        audioCtx.currentTime + 0.1,
                     );
                 });
                 lkAmpl.addEventListener("input", async (evt) => {
@@ -313,11 +349,19 @@
                 body {
                     font-family: monospace;
                     margin: 0;
+                    scrollbar-gutter: stable both-edges;
+                    overflow-y: scroll;
                 }
                 h1 {
                     grid-column: 1 / -1;
                     grid-row: 1 / span 1;
                     margin: 0;
+                    display: flex;
+                    gap: 0.5ex;
+                }
+                h1 img {
+                    height: 1em;
+                    width: 1em;
                 }
                 h2 {
                     margin: 0;
