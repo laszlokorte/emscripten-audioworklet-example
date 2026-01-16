@@ -107,7 +107,6 @@
 
                     const fadeTime = 0.1;
                     const now = audioCtx.currentTime;
-                    gain.gain.cancelScheduledValues(now);
                     gain.gain.setValueAtTime(gain.gain.value, now);
                     gain.gain.linearRampToValueAtTime(
                         1,
@@ -137,7 +136,6 @@
 
                     const fadeTime = 0.1;
                     const now = audioCtx.currentTime;
-                    gain.gain.cancelScheduledValues(now);
                     gain.gain.setValueAtTime(gain.gain.value, now);
                     gain.gain.linearRampToValueAtTime(
                         1,
@@ -163,7 +161,6 @@
                     const fadeTime = 0.1;
                     lkGrid.classList.remove("loading");
                     await audioCtx.resume();
-                    gain.gain.cancelScheduledValues(now);
                     gain.gain.setValueAtTime(gain.gain.value, now);
                     gain.gain.linearRampToValueAtTime(
                         1,
@@ -176,40 +173,36 @@
                     const now = audioCtx.currentTime;
                     const fadeTime = 0.1;
                     await audioCtx.resume();
-                    gain.gain.cancelScheduledValues(now);
-                    gain.gain.linearRampToValueAtTime(
-                        gain.gain.value,
-                        audioCtx.currentTime,
-                    );
-                    gain.gain.linearRampToValueAtTime(
-                        0.0,
-                        audioCtx.currentTime + fadeTime,
-                    );
+                    gain.gain.setValueAtTime(gain.gain.value, now);
+                    gain.gain.linearRampToValueAtTime(0.0, now + fadeTime);
                     log("Disable Sound");
                 });
 
                 lkFreq.addEventListener("input", async (evt) => {
                     freqParam.setValueAtTime(
-                        evt.currentTarget.valueAsNumber,
+                        freqParam.value,
                         audioCtx.currentTime,
+                    );
+                    freqParam.linearRampToValueAtTime(
+                        evt.currentTarget.valueAsNumber,
+                        audioCtx.currentTime + 0.1,
                     );
                 });
 
                 lkBackground.addEventListener("input", async (evt) => {
-                    backgroundParam.setValueAtTime(
-                        evt.currentTarget.checked,
-                        audioCtx.currentTime + 0.1,
+                    const t = audioCtx.currentTime;
+                    backgroundParam.setValueAtTime(backgroundParam.value, t);
+                    backgroundParam.linearRampToValueAtTime(
+                        evt.currentTarget.checked ? 1 : 0,
+                        t + 0.1,
                     );
                 });
                 lkAmpl.addEventListener("input", async (evt) => {
-                    volume.gain.cancelScheduledValues(audioCtx.currentTime);
-                    volume.gain.linearRampToValueAtTime(
-                        volume.gain.value,
-                        audioCtx.currentTime,
-                    );
-                    volume.gain.linearRampToValueAtTime(
+                    const t = audioCtx.currentTime;
+                    volume.gain.setValueAtTime(volume.gain.value, t);
+                    volume.gain.exponentialRampToValueAtTime(
                         evt.currentTarget.value,
-                        audioCtx.currentTime + 0.1,
+                        t + 0.1,
                     );
                 });
                 window.addEventListener("pointermove", (evt) => {
